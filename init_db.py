@@ -1,8 +1,9 @@
 # init_db.py
 import os
-import psycopg2
 import random
 from datetime import datetime, timedelta
+
+import psycopg2
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -11,9 +12,9 @@ load_dotenv()
 # Get database URL
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not set in .env file")
+    msg = "DATABASE_URL not set in .env file"
+    raise ValueError(msg)
 
-print(f"Connecting to database...")
 
 # Connect to database
 conn = psycopg2.connect(DATABASE_URL)
@@ -21,7 +22,6 @@ conn.autocommit = True
 cursor = conn.cursor()
 
 # Create tables
-print("Creating tables...")
 cursor.execute("""
 DROP TABLE IF EXISTS orders CASCADE;
 DROP TABLE IF EXISTS items CASCADE;
@@ -61,20 +61,16 @@ user_count = cursor.fetchone()[0]
 
 # Insert sample data if none exists
 if user_count == 0:
-    print("Adding sample data...")
-    
+
     # Create 500 users
-    print("Creating users...")
     for i in range(1, 501):
         username = f"user{i}"
         email = f"user{i}@example.com"
         cursor.execute(
-            "INSERT INTO users (username, email) VALUES (%s, %s) RETURNING id",
-            (username, email)
+            "INSERT INTO users (username, email) VALUES (%s, %s) RETURNING id", (username, email),
         )
-    
+
     # Create 2000 items
-    print("Creating items...")
     categories = ["Electronics", "Clothing", "Home", "Books", "Sports", "Food", "Tools", "Toys"]
     for i in range(1, 2001):
         name = f"Item {i}"
@@ -83,52 +79,49 @@ if user_count == 0:
         category = random.choice(categories)
         in_stock = random.choice([True, True, True, False])  # 75% in stock
         owner_id = random.randint(1, 500)  # Random user
-        
+
         cursor.execute(
             "INSERT INTO items (name, description, price, category, in_stock, owner_id) VALUES (%s, %s, %s, %s, %s, %s)",
-            (name, description, price, category, in_stock, owner_id)
+            (name, description, price, category, in_stock, owner_id),
         )
-    
+
     # Create 2000 orders
-    print("Creating orders...")
     statuses = ["pending", "processing", "shipped", "delivered", "cancelled"]
     start_date = datetime.now() - timedelta(days=365)  # Orders from last year
-    
+
     for i in range(1, 2001):
         user_id = random.randint(1, 500)
         item_id = random.randint(1, 2000)
         quantity = random.randint(1, 5)
-        
+
         # Get the price of the item
         cursor.execute("SELECT price FROM items WHERE id = %s", (item_id,))
         item_price = cursor.fetchone()[0]
-        
+
         total_price = item_price * quantity
-        
+
         # Random date within the last year
         days_ago = random.randint(0, 365)
         order_date = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S")
-        
+
         # Older orders more likely to be delivered
         if days_ago > 30:
             status = random.choice(["delivered", "delivered", "delivered", "shipped", "cancelled"])
         else:
             status = random.choice(statuses)
-            
+
         cursor.execute(
             "INSERT INTO orders (user_id, item_id, quantity, total_price, order_date, status) VALUES (%s, %s, %s, %s, %s, %s)",
-            (user_id, item_id, quantity, total_price, order_date, status)
+            (user_id, item_id, quantity, total_price, order_date, status),
         )
-        
+
         if i % 200 == 0:
-            print(f"Created {i} orders...")
-    
-    print("Sample data added!")
+            pass
+
 else:
-    print("Data already exists. Skipping initialization.")
+    pass
 
 # Add indexes for performance
-print("Creating indexes...")
 cursor.execute("""
 CREATE INDEX IF NOT EXISTS idx_items_owner_id ON items (owner_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders (user_id);
@@ -144,10 +137,8 @@ item_count = cursor.fetchone()[0]
 cursor.execute("SELECT COUNT(*) FROM orders")
 order_count = cursor.fetchone()[0]
 
-print(f"Database now has {user_count} users, {item_count} items, and {order_count} orders")
 
 # Close connection
 cursor.close()
 conn.close()
 
-print("Database setup complete!")
