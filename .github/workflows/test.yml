@@ -8,9 +8,6 @@ on:
 env:
   PYTHONWARNDEFAULTENCODING: 'true'
   PY_COLORS: 1
-  POSTGRES_USER: postgres
-  POSTGRES_PASSWORD: postgres
-  POSTGRES_DB: test_db
   LOCAL_DB_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
 permissions:
@@ -26,6 +23,7 @@ jobs:
   lint:
     name: Lint and Format
     runs-on: ubuntu-latest
+    environment: workflow
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -48,14 +46,15 @@ jobs:
     name: "Build and Test"
     needs: lint
     runs-on: ubuntu-latest
+    environment: workflow
 
     services:
       postgres:
         image: postgres:latest
         env:
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
         ports:
           - 5432:5432
         options: >-
@@ -107,10 +106,8 @@ jobs:
            # Run the sync script
           python .github/scripts/sync_railway_data.py
         
-
       - name: Run tests
         env:
           DATABASE_URL: ${{ env.LOCAL_DB_URL }}
-          # Add any other environment variables needed for tests
         run: |
           poetry run pytest -v
