@@ -1,136 +1,70 @@
 #!/usr/bin/env python3
 
-import contextlib
 import os
 import sys
+import subprocess
+import tempfile
 
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+# Get database connection strings from environment
+source_url = os.environ.get("RAILWAY_DATABASE_URL")
+target_url = os.environ.get("LOCAL_DB_URL", "postgresql://postgres:postgres@localhost:5432/test_db")
 
-# Get connection details
-railway_url = os.environ.get("RAILWAY_DATABASE_URL")
-local_url = os.environ.get("LOCAL_DB_URL", "postgresql://postgres:postgres@localhost:5432/test_db")
-
-
-# Debug connection info (without revealing password)
-def print_connection_info(url) -> str:
-    if not url:
-        return "None"
-    # Hide password in output
-    parts = url.split("@")
-    if len(parts) > 1:
-        auth_parts = parts[0].split(":")
-        if len(auth_parts) > 2:
-            return f"{auth_parts[0]}:****@{parts[1]}"
-    return "Invalid URL format"
-
-
-
-# Verify we have the necessary environment variables
-if not railway_url:
+# Exit if source URL isn't available
+if not source_url:
+    print("ERROR: RAILWAY_DATABASE_URL is not set")
     sys.exit(1)
 
+# Create a temporary file for the schema dump
+temp_file = tempfile.mktemp(suffix='.sql')
 
-# Connect to both databases with explicit parameters
 try:
-    # Parse connection parameters instead of using URL directly
-    if railway_url.startswith("postgresql://"):
-        # Parse out components in case URL format is causing issues
-        # Format: postgresql://username:password@hostname:port/database
-        auth = railway_url.split("@")[0].replace("postgresql://", "")
-        username = auth.split(":")[0]
-        password = auth.split(":")[1]
-
-        host_part = railway_url.split("@")[1]
-        hostname = host_part.split(":")[0]
-        port_db = host_part.split(":")[1]
-        port = port_db.split("/")[0]
-        database = port_db.split("/")[1].split("?")[0]
-
-
-        # Connect with explicit parameters
-        railway_conn = psycopg2.connect(
-            host=hostname, port=port, dbname=database, user=username, password=password,
+    # Step 1: Dump schema (no data) from source database
+    print("Exporting schema from source database...")
+    schema_cmd = f'PGPASSWORD="{source_url.split(":", 2)[2].split("@")[0]}" pg_dump --schema-only --no-owner --no-acl {source_url} -f {temp_file}'
+    subprocess.run(schema_cmd, shell=True, check=True)
+    
+    # Step 2: Reset and restore schema to target database
+    print("Restoring schema to target database...")
+    reset_cmd = f'PGPASSWORD="{target_url.split(":", 2)[2].split("@")[0]}" psql {target_url} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
+    subprocess.run(reset_cmd, shell=True, check=True)
+    
+    restore_cmd = f'PGPASSWORD="{target_url.split(":", 2)[2].split("@")[0]}" psql {target_url} -f {temp_file}'
+    subprocess.run(restore_cmd, shell=True, check=True)
+    
+    # Step 3: Get list of tables
+    print("Getting table list...")
+    get_tables_cmd = f'PGPASSWORD="{source_url.split(":", 2)[2].split("@")[0]}" psql {source_url} -t -c "SELECT tablename FROM pg_tables WHERE schemaname = \'public\';"'
+    result = subprocess.run(get_tables_cmd, shell=True, capture_output=True, text=True, check=True)
+    
+    tables = [table.strip() for table in result.stdout.splitlines() if table.strip()]
+    
+    # Step 4: Copy limited data for each table
+    row_limit = 500
+    for table in tables:
+        print(f"Copying data for table: {table} (max {row_limit} rows)")
+        
+        # Export data from source and import to target in one pipeline
+        copy_cmd = (
+            f'PGPASSWORD="{source_url.split(":", 2)[2].split("@")[0]}" psql {source_url} -c '
+            f'"\\COPY (SELECT * FROM {table} LIMIT {row_limit}) TO STDOUT CSV HEADER" | '
+            f'PGPASSWORD="{target_url.split(":", 2)[2].split("@")[0]}" psql {target_url} -c '
+            f'"\\COPY {table} FROM STDIN CSV HEADER"'
         )
-    else:
-        # Try direct connection as fallback
-        railway_conn = psycopg2.connect(railway_url)
-
-    railway_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    railway_cur = railway_conn.cursor()
-except Exception:
+        
+        # We don't use check=True here because some tables might fail but we want to continue
+        result = subprocess.run(copy_cmd, shell=True)
+        if result.returncode != 0:
+            print(f"  Warning: Could not copy data for table {table}")
+    
+    print("Database sync completed successfully")
+    
+except subprocess.CalledProcessError as e:
+    print(f"Error: Command failed with code {e.returncode}")
     sys.exit(1)
-
-try:
-    # Connect to local database
-    local_conn = psycopg2.connect(local_url)
-    local_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    local_cur = local_conn.cursor()
-except Exception:
-    railway_conn.close()
+except Exception as e:
+    print(f"Error: {e}")
     sys.exit(1)
-
-# Get all tables from Railway
-railway_cur.execute("""
-    SELECT tablename FROM pg_tables
-    WHERE schemaname = 'public'
-""")
-tables = [row[0] for row in railway_cur.fetchall()]
-
-# For each table, get schema and limited data
-for table in tables:
-
-    # Drop existing table in local DB
-    with contextlib.suppress(Exception):
-        local_cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
-
-    # Get column definitions
-    railway_cur.execute(f"""
-        SELECT column_name, data_type, character_maximum_length
-        FROM information_schema.columns
-        WHERE table_name = '{table}'
-        ORDER BY ordinal_position
-    """)
-    columns = railway_cur.fetchall()
-
-    # Create table in local DB
-    create_table_sql = f"CREATE TABLE {table} ("
-    column_defs = []
-
-    for col_name, data_type, max_length in columns:
-        col_def = f"{col_name} {data_type}"
-        if max_length:
-            col_def += f"({max_length})"
-        column_defs.append(col_def)
-
-    create_table_sql += ", ".join(column_defs) + ")"
-
-    try:
-        local_cur.execute(create_table_sql)
-    except Exception:
-        continue
-
-    # Get data (limited to 500 rows)
-    try:
-        railway_cur.execute(f"SELECT * FROM {table} LIMIT 500")
-        rows = railway_cur.fetchall()
-
-        if rows:
-            cols = [desc[0] for desc in railway_cur.description]
-            placeholders = ",".join(["%s"] * len(cols))
-
-            insert_sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders})"
-
-            for row in rows:
-                with contextlib.suppress(Exception):
-                    local_cur.execute(insert_sql, row)
-
-    except Exception:
-        pass
-
-# Close connections
-railway_cur.close()
-railway_conn.close()
-local_cur.close()
-local_conn.close()
-
+finally:
+    # Clean up
+    if os.path.exists(temp_file):
+        os.unlink(temp_file)
