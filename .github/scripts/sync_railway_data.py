@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
-
 import contextlib
 import os
 import sys
 
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, connection, cursor
 
 
@@ -12,7 +11,8 @@ def get_connection_details() -> tuple[str, str]:
     """Get database connection details from environment variables."""
     railway_url = os.environ.get("RAILWAY_DATABASE_URL")
     local_url = os.environ.get(
-        "LOCAL_DB_URL", "postgresql://postgres:postgres@localhost:5432/test_db",
+        "LOCAL_DB_URL",
+        "postgresql://postgres:postgres@localhost:5432/test_db",
     )
     return railway_url, local_url
 
@@ -41,42 +41,46 @@ def connect_to_railway(url: str) -> tuple[connection | None, cursor | None]:
             )
         else:
             conn = psycopg2.connect(url)
-
+    except psycopg2.Error:
+        return None, None
+    else:
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
         return conn, cur
-    except Exception:
-        return None, None
 
 
 def connect_to_local(url: str) -> tuple[connection | None, cursor | None]:
     """Connect to local database."""
     try:
         conn = psycopg2.connect(url)
+    except psycopg2.Error:
+        return None, None
+    else:
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
         return conn, cur
-    except Exception:
-        return None, None
 
 
 def get_tables(cur: cursor) -> list[str]:
     """Get all tables from the database."""
-    cur.execute("""
+    cur.execute(
+        """
         SELECT tablename FROM pg_tables
         WHERE schemaname = 'public'
-    """)
+        """,
+    )
     return [row[0] for row in cur.fetchall()]
 
 
 def get_column_definitions(cur: cursor, table: str) -> list[tuple]:
     """Get column definitions for a table."""
-    cur.execute(f"""
-        SELECT column_name, data_type, character_maximum_length
-        FROM information_schema.columns
-        WHERE table_name = '{table}'
-        ORDER BY ordinal_position
-    """)
+    cur.execute(
+        "SELECT column_name, data_type, character_maximum_length "
+        "FROM information_schema.columns "
+        "WHERE table_name = %s "
+        "ORDER BY ordinal_position",
+        (table,),
+    )
     return cur.fetchall()
 
 
@@ -98,18 +102,22 @@ def create_table_sql(table: str, columns: list[tuple]) -> str:
 def copy_table_data(source_cur: cursor, dest_cur: cursor, table: str) -> None:
     """Copy data from source to destination."""
     try:
-        source_cur.execute(f"SELECT * FROM {table} LIMIT 500")
+        query = sql.SQL("SELECT * FROM {} LIMIT 500").format(sql.Identifier(table))
+        source_cur.execute(query)
         rows = source_cur.fetchall()
 
         if rows:
             cols = [desc[0] for desc in source_cur.description]
-            placeholders = ",".join(["%s"] * len(cols))
-            insert_sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders})"
-
+            placeholders = sql.SQL(",").join(sql.Placeholder() for _ in cols)
+            insert_sql = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+                sql.Identifier(table),
+                sql.SQL(",").join(map(sql.Identifier, cols)),
+                placeholders,
+            )
             for row in rows:
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(psycopg2.Error):
                     dest_cur.execute(insert_sql, row)
-    except Exception:
+    except psycopg2.Error:
         pass
 
 
@@ -117,12 +125,12 @@ def close_connections(*connections: connection) -> None:
     """Close database connections."""
     for conn in connections:
         if conn:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(psycopg2.Error):
                 conn.close()
 
 
 def main() -> None:
-    """Main function to copy database schema and data."""
+    """Copy database schema and data."""
     railway_url, local_url = get_connection_details()
 
     # Verify we have the necessary environment variables
@@ -146,21 +154,22 @@ def main() -> None:
         # For each table, get schema and limited data
         for table in tables:
             # Drop existing table in local DB
-            with contextlib.suppress(Exception):
-                local_cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+            with contextlib.suppress(psycopg2.Error):
+                local_cur.execute(
+                    sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.Identifier(table)),
+                )
 
             # Get column definitions and create table
             columns = get_column_definitions(railway_cur, table)
-            sql = create_table_sql(table, columns)
+            create_sql = create_table_sql(table, columns)
 
             try:
-                local_cur.execute(sql)
-            except Exception:
+                local_cur.execute(create_sql)
+            except psycopg2.Error:
                 continue
 
             # Copy data
             copy_table_data(railway_cur, local_cur, table)
-
     finally:
         # Clean up connections
         close_connections(railway_conn, local_conn)
