@@ -20,38 +20,56 @@ temp_schema = tempfile.mktemp(suffix=".sql")
 try:
     # 1. Export & import schema
     subprocess.run(
-        ["pg_dump", "--schema-only", "--no-owner", source_url, "-f", temp_schema], check=True,
+        ["pg_dump", "--schema-only", "--no-owner", source_url, "-f", temp_schema],
+        check=True,
+        encoding="utf-8",  # Fix encoding warning
     )
+
     subprocess.run(
-        ["psql", target_url, "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"], check=True,
+        ["psql", target_url, "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"],
+        check=True,
+        encoding="utf-8",
     )
-    subprocess.run(["psql", target_url, "-f", temp_schema], check=True)
 
-    # 2. Export core tables first (reference tables)
-    tables_query = """SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-                      ORDER BY tablename IN (SELECT ccu.table_name FROM information_schema.table_constraints tc
-                      JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-                      WHERE tc.constraint_type = 'FOREIGN KEY') ASC;"""
+    subprocess.run(["psql", target_url, "-f", temp_schema], check=True, encoding="utf-8")
 
-    tables = subprocess.run(
-        ["psql", source_url, "-t", "-c", tables_query], capture_output=True, text=True, check=True,
-    ).stdout.splitlines()
+    # 2. Disable foreign key constraints in target database
+    subprocess.run(
+        ["psql", target_url, "-c", "SET session_replication_role = 'replica';"],
+        check=True,
+        encoding="utf-8",
+    )
 
-    # 3. Import data with dependency handling
-    for table in [t.strip() for t in tables if t.strip()]:
+    # 3. Get all tables
+    tables_query = (
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+    )
+    result = subprocess.run(
+        ["psql", source_url, "-t", "-c", tables_query],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
+    )
+    tables = [t.strip() for t in result.stdout.splitlines() if t.strip()]
+
+    # 4. Import data with foreign keys disabled
+    for table in tables:
         subprocess.run(
-            [
-                "pg_dump",
-                "--data-only",
-                "--disable-triggers",
-                "--table",
-                f"public.{table}",
-                "--rows=100",
-                source_url,
-            ],
+            ["pg_dump", "--data-only", "--table", f"public.{table}", "--rows=100", source_url],
             stdout=subprocess.PIPE,
             check=True,
-        ).stdout | subprocess.run(["psql", target_url], stdin=subprocess.PIPE, check=False)
+            encoding="utf-8",
+        ).stdout | subprocess.run(
+            ["psql", target_url], stdin=subprocess.PIPE, check=False, encoding="utf-8",
+        )
+
+    # 5. Re-enable foreign key constraints
+    subprocess.run(
+        ["psql", target_url, "-c", "SET session_replication_role = 'origin';"],
+        check=True,
+        encoding="utf-8",
+    )
 
 finally:
     if os.path.exists(temp_schema):
