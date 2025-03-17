@@ -135,9 +135,8 @@ try:
                 "psql",
                 source_url,
                 "-c",
-                f"\\COPY (SELECT * FROM \"{safe_table}\" "
+                f'\\COPY (SELECT * FROM "{safe_table}" '
                 f"LIMIT {row_limit}) TO '{export_path}' CSV HEADER",
-
             ]
             run_command(export_cmd, env=source_env)
 
