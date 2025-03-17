@@ -23,7 +23,7 @@ jobs:
   lint:
     name: Lint and Format
     runs-on: ubuntu-latest
-    environment: workflow
+    environment: Workflow
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
