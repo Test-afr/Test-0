@@ -2,35 +2,57 @@ name: Sync Test DB with Prod
 
 on:
   schedule:
-    - cron: '0 1 */3 * *' 
+    - cron: '0 1 */3 * *'   # every 3 days
   workflow_dispatch:
 
 jobs:
   sync-db:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Get Commit Count Since Last Sync
-        id: commits
-        run: |
-          LAST_SYNC_COMMIT=$(git log --grep="DB Sync" --pretty=format:"%H" -n 1 || echo "")
-          if [ -z "$LAST_SYNC_COMMIT" ]; then
-            echo "No previous sync found, running full sync."
-            echo "count=10" >> $GITHUB_ENV  # Force first sync
-          else
-            COUNT=$(git rev-list --count $LAST_SYNC_COMMIT..HEAD)
-            echo "count=$COUNT" >> $GITHUB_ENV
-          fi
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: 'pyproject.toml'
 
-      - name: Sync Databases
-        if: ${{ env.count >= 10 }}
+      - name: Install Dependencies
+        run: |
+          pip install poetry
+          poetry install --with dev
+
+      - name: Run Sync Script
         env:
           RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
-          LOCAL_DB_URL: "postgresql://postgres:postgres@localhost:5432/test_db"
+          LOCAL_DB_URL: postgresql://postgres:postgres@localhost:5432/test_db
         run: |
+          # This script syncs production data from Railway into our local Postgres
           python sync_db.py
-          git commit --allow-empty -m "DB Sync: Updated test DB from production"
-          git push
+
+      - name: Save DB Dump
+        run: |
+          echo "Saving database state"
+          PGPASSWORD=postgres pg_dump -h localhost -U postgres -d test_db > dump.sql
+
+      - name: Upload DB Dump Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-db-dump
+          path: dump.sql
+          retention-days: 4
