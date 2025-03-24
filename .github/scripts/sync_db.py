@@ -3,9 +3,7 @@ import subprocess
 import sys
 
 import psycopg2
-from dotenv import load_dotenv
 
-load_dotenv()
 # make it a script .sh
 # pg cron -> try and count number of commits
 # sync db
