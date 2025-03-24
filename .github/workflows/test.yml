@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened]
   push:
     branches: [main]
+  workflow_dispatch:
 
 env:
   PYTHONWARNDEFAULTENCODING: 'true'
@@ -83,7 +84,7 @@ jobs:
           poetry install --with dev
           pip install psycopg2-binary python-dotenv
 
-      - name: Download DB Dump (if exists)
+      - name: Download DB Dump Artifact
         uses: actions/download-artifact@v4
         with:
           name: test-db-dump
@@ -106,11 +107,10 @@ jobs:
       - name: Save DB Dump
         if: always()
         run: |
-          echo "Saving database state"
-          docker exec $(docker ps -qf "ancestor=postgres:latest") \
-          pg_dump -U postgres -d test_db > dump.sql
+          echo "Saving current database state"
+          PGPASSWORD=postgres pg_dump -h localhost -U postgres -d test_db > dump.sql
 
-      - name: Upload DB Dump
+      - name: Upload DB Dump Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
