@@ -17,6 +17,9 @@ def get_connection_details() -> tuple[str, str]:
     local_url = os.environ.get("TEST_DATABASE_URL")
     if not railway_url:
         sys.exit("RAILWAY_DATABASE_URL environment variable not set")
+    if not local_url:
+        sys.exit("TEST_DATABASE_URL environment variable not set")
+
     return railway_url, local_url
 
 
