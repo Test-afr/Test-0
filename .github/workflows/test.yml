@@ -107,7 +107,8 @@ jobs:
         if: always()
         run: |
           echo "Saving database state"
-          PGPASSWORD=postgres pg_dump -h localhost -U postgres -d test_db > dump.sql
+          docker exec $(docker ps -qf "ancestor=postgres:latest") \
+          pg_dump -U postgres -d test_db > dump.sql
 
       - name: Upload DB Dump
         if: always()
