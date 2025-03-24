@@ -1,0 +1,36 @@
+name: Sync Test DB with Prod
+
+on:
+  schedule:
+    - cron: '30 1 * * *'  # Runs daily at 1:30 AM UTC
+  workflow_dispatch:
+
+jobs:
+  sync-db:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Get Commit Count Since Last Sync
+        id: commits
+        run: |
+          LAST_SYNC_COMMIT=$(git log --grep="DB Sync" --pretty=format:"%H" -n 1 || echo "")
+          if [ -z "$LAST_SYNC_COMMIT" ]; then
+            echo "No previous sync found, running full sync."
+            echo "count=10" >> $GITHUB_ENV  # Force first sync
+          else
+            COUNT=$(git rev-list --count $LAST_SYNC_COMMIT..HEAD)
+            echo "count=$COUNT" >> $GITHUB_ENV
+          fi
+
+      - name: Sync Databases
+        if: ${{ env.count >= 10 }}
+        env:
+          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+          LOCAL_DB_URL: "postgresql://postgres:postgres@localhost:5432/test_db"
+        run: |
+          python sync_db.py
+          git commit --allow-empty -m "DB Sync: Updated test DB from production"
+          git push
