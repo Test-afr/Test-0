@@ -1,4 +1,5 @@
 name: Python Unit Tests
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -9,7 +10,6 @@ env:
   PYTHONWARNDEFAULTENCODING: 'true'
   PY_COLORS: 1
   TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
 
 permissions:
   contents: read
@@ -24,7 +24,6 @@ jobs:
   lint:
     name: Lint and Format
     runs-on: ubuntu-latest
-    environment: Workflow
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -42,12 +41,11 @@ jobs:
 
       - name: Run Ruff Linting
         run: poetry run ruff check .
-        
+
   test:
     name: "Build and Test"
     needs: lint
     runs-on: ubuntu-latest
-    environment: workflow
 
     services:
       postgres:
@@ -63,7 +61,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -76,39 +74,45 @@ jobs:
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
-          
+
       - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python - -y
-          
+        run: curl -sSL https://install.python-poetry.org | python - -y
+
       - name: Install Dependencies
         run: |
           poetry install --with dev
           pip install psycopg2-binary python-dotenv
-      
-      - name: Sync schema and data from Railway
-        env:
-          RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+
+      - name: Download DB Dump (if exists)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-db-dump
+          path: .
+
+      - name: Load DB Dump If Exists
         run: |
-          # Check if secret is set (without revealing it)
-          if [ -n "$RAILWAY_DATABASE_URL" ]; then
-            echo "RAILWAY_DATABASE_URL is set"
+          if [ -f dump.sql ]; then
+            echo "Restoring database from dump.sql"
+            PGPASSWORD=postgres psql -h localhost -U postgres -d test_db < dump.sql
           else
-            echo "ERROR: RAILWAY_DATABASE_URL is not set"
-            exit 1
+            echo "No previous database dump found"
           fi
-            
-          # Install dependencies
-          pip install psycopg2-binary
-            
-          # Make script executable
-          chmod +x .github/scripts/sync_db.py
-            
-           # Run the sync script
-          python .github/scripts/sync_db.py
-        
+
       - name: Run tests
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: poetry run pytest -v
+
+      - name: Save DB Dump
+        if: always()
         run: |
-          poetry run pytest -v
+          echo "Saving database state"
+          PGPASSWORD=postgres pg_dump -h localhost -U postgres -d test_db > dump.sql
+
+      - name: Upload DB Dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-db-dump
+          path: dump.sql
+          retention-days: 4
