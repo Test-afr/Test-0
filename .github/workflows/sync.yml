@@ -43,10 +43,9 @@ jobs:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         run: |
           # This script syncs production data from Railway into our local Postgres
-          # Make script executable
+          # Install dependencies
+          pip install psycopg2-binary
           chmod +x .github/scripts/sync_db.py
-            
-           # Run the sync script
           python .github/scripts/sync_db.py
 
       - name: Save DB Dump
