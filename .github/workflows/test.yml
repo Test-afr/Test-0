@@ -105,10 +105,12 @@ jobs:
         run: poetry run pytest -v
 
       - name: Save DB Dump
-        if: always()
         run: |
           echo "Saving current database state"
-          PGPASSWORD=postgres pg_dump -h localhost -U postgres -d test_db > dump.sql
+          docker run --rm --network=host \
+            -e PGPASSWORD=postgres \
+            postgres:latest pg_dump -h localhost -U postgres -d test_db > dump.sql
+
 
       - name: Upload DB Dump Artifact
         if: always()
