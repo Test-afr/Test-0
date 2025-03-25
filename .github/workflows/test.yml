@@ -93,7 +93,9 @@ jobs:
           fi  
 
       - name: Install Dependencies
-        run: poetry install --with dev
+        run: | 
+          pip install poetry
+          poetry install --with dev
 
       - name: Load DB Dump If Exists
         run: |
