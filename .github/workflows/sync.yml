@@ -2,12 +2,13 @@ name: Sync Test DB with Prod
 
 on:
   schedule:
-    - cron: '0 1 */3 * *'   # every 3 days
+    - cron: '0 1 */2 * *'   # every 3 days
   workflow_dispatch:
 
 jobs:
   sync-db:
     runs-on: ubuntu-latest
+    environment: Workflow
     services:
       postgres:
         image: postgres:latest
@@ -44,6 +45,7 @@ jobs:
         run: |
           poetry run python .github/scripts/sync_db.py
 
+
       - name: Save DB Dump
         run: |
           echo "Saving current database state"
@@ -57,4 +59,4 @@ jobs:
         with:
           name: test-db-dump
           path: dump.sql
-          retention-days: 4
+          retention-days: 3
