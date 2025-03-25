@@ -13,7 +13,7 @@ env:
   TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   deployments: write
 
@@ -73,22 +73,27 @@ jobs:
           python-version-file: 'pyproject.toml'
           allow-prereleases: true
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL client and GitHub CLI
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client gh
 
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python - -y
+      - name: Configure GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+        
+      - name: Download Latest Sync Artifact
+        id: download-sync
+        env:
+          WORKFLOW_FILE: "Sync Test DB with Prod"
+        run: |
+          run_id=$(gh run list --workflow="${WORKFLOW_FILE}" --branch=main --json databaseId,conclusion -q '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
+          if [ -z "$run_id" ]; then
+            echo "No successful sync workflow run found. No artifact to download."
+          else
+            echo "Found Sync run_id=$run_id"
+            gh run download "$run_id" -n test-db-dump --dir .
+          fi  
 
       - name: Install Dependencies
-        run: |
-          poetry install --with dev
-          pip install psycopg2-binary python-dotenv
-
-      - name: Download DB Dump Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: test-db-dump
-          path: .
+        run: poetry install --with dev
 
       - name: Load DB Dump If Exists
         run: |
@@ -103,19 +108,3 @@ jobs:
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
         run: poetry run pytest -v
-
-      - name: Save DB Dump
-        run: |
-          echo "Saving current database state"
-          docker run --rm --network=host \
-            -e PGPASSWORD=postgres \
-            postgres:latest pg_dump -h localhost -U postgres -d test_db > dump.sql
-
-
-      - name: Upload DB Dump Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-db-dump
-          path: dump.sql
-          retention-days: 4
