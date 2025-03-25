@@ -93,7 +93,9 @@ jobs:
           fi  
 
       - name: Install Dependencies
-        run: poetry install --with dev
+        run: | 
+          pip install poetry
+          poetry install --with dev
 
       - name: Load DB Dump If Exists
         run: |
@@ -104,7 +106,16 @@ jobs:
             echo "No previous database dump found"
           fi
 
-      - name: Run tests
-        env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-        run: poetry run pytest -v
+      - name: Download Environment Variables
+        uses: actions/download-artifact@v4
+        with:
+          name: env-vars
+          path: .
+        
+      - name: Load Environment Variables and Run Tests
+        run: |
+          set -o allexport
+          source env_vars.env
+          set +o allexport
+          poetry run pytest -v
+        
