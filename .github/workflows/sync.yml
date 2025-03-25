@@ -42,11 +42,7 @@ jobs:
           RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         run: |
-          # This script syncs production data from Railway into our local Postgres
-          # Install dependencies
-          pip install psycopg2-binary dotenv
-          chmod +x .github/scripts/sync_db.py
-          python .github/scripts/sync_db.py
+          poetry run python .github/scripts/sync_db.py
 
       - name: Save DB Dump
         run: |
