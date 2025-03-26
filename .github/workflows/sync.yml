@@ -72,9 +72,15 @@ jobs:
           # Debugging: Confirm variables are set
           env | grep DATABASE_URL || echo "DATABASE_URL not set"
           env | grep TEST_DATABASE_URL || echo "TEST_DATABASE_URL not set"
-      
+
+          echo "Available Railway variables:"
+          echo "$variables" | jq -r '.data.variables | keys[]'
+          
+          # Or to see both keys and values (with sensitive values masked)
+          echo "$variables" | jq -r '.data.variables | to_entries[] | "\(.key)=\(if .value | test("^[a-zA-Z0-9_-]+$") then .value else "[REDACTED]" end)"
+                
           # Run sync_db.py
-          poetry run python .github/scripts/sync_db.py
+          #poetry run python .github/scripts/sync_db.py
 
       - name: Save DB Dump
         run: |
