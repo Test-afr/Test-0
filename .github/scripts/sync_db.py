@@ -2,14 +2,14 @@ import os
 import subprocess
 import sys
 
-import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def get_connection_details() -> tuple[str, str]:
     """Get database connection details from environment variables."""
-    railway_url = os.environ.get("RAILWAY_DATABASE_URL")
+    railway_url = os.environ.get("DATABASE_PUBLIC_URL")
     local_url = os.environ.get("TEST_DATABASE_URL")
     if not railway_url:
         sys.exit("RAILWAY_DATABASE_URL environment variable not set")
@@ -17,6 +17,7 @@ def get_connection_details() -> tuple[str, str]:
         sys.exit("TEST_DATABASE_URL environment variable not set")
 
     return railway_url, local_url
+
 
 def reset_local_schema(local_url: str) -> None:
     """Reset the local database's public schema to ensure a clean restoration."""
@@ -30,6 +31,7 @@ def reset_local_schema(local_url: str) -> None:
         subprocess.run(reset_cmd, text=True, capture_output=True, check=True)
     except subprocess.CalledProcessError as err:
         sys.exit(f"Error resetting local schema: {err.stderr}")
+
 
 def main() -> None:
     """Dump the Railway database and restore it to the local database."""
@@ -48,6 +50,7 @@ def main() -> None:
         subprocess.run(restore_cmd, input=dump_result.stdout, text=True, check=True)
     except subprocess.CalledProcessError as err:
         sys.exit(f"Error running psql restore: {err.stderr}")
+
 
 if __name__ == "__main__":
     main()
