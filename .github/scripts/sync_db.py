@@ -10,7 +10,7 @@ load_dotenv()
 def get_connection_details() -> tuple[str, str]:
     """Get database connection details from environment variables."""
     railway_url = os.environ.get("DATABASE_PUBLIC_URL")
-    local_url = os.environ.get("TEST_DATABASE_URL")
+    local_url = os.environ.get("DEVELOPMENT_DATABASE_URL")
     if not railway_url:
         sys.exit("RAILWAY_DATABASE_URL environment variable not set")
     if not local_url:
@@ -43,14 +43,14 @@ def main() -> None:
     try:
         dump_result = subprocess.run(dump_cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as err:
-        sys.exit(f"Error running pg_dump: {err.stderr}")
+        sys.exit(f"Error running pg_dump: {err.stderr}") #clean pgdump --clean
 
     restore_cmd = ["psql", local_url]
     try:
         subprocess.run(restore_cmd, input=dump_result.stdout, text=True, check=True)
     except subprocess.CalledProcessError as err:
         sys.exit(f"Error running psql restore: {err.stderr}")
-
+ # add a test
 
 if __name__ == "__main__":
     main()
