@@ -38,14 +38,16 @@ jobs:
           pip install poetry
           poetry install --with dev
 
-      - name: Fetch Environment Variables from Railway
+      - name: Fetch Environment Variables & Sync DB
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
           SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }} 
+          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
           set +x
+      
+          # Fetch Railway environment variables
           variables=$(curl -sS -X POST "https://backboard.railway.app/graphql/v2" \
             -H "Authorization: Bearer ${RAILWAY_API_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -60,9 +62,18 @@ jobs:
           }
           EOF
           )
+      
           eval $(echo "$variables" | jq -r '.data.variables | to_entries | .[] | @sh "export \(.key)=\(.value)"')
-          echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db" >> $GITHUB_ENV
-
+      
+          # Manually export the test database URL
+          export TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          echo "TEST_DATABASE_URL=$TEST_DATABASE_URL" >> $GITHUB_ENV
+      
+          # Debugging: Confirm variables are set
+          env | grep DATABASE_URL || echo "DATABASE_URL not set"
+          env | grep TEST_DATABASE_URL || echo "TEST_DATABASE_URL not set"
+      
+          # Run sync_db.py
           poetry run python .github/scripts/sync_db.py
 
       - name: Save DB Dump
