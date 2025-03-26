@@ -79,18 +79,16 @@ jobs:
       - name: Configure GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
         
+
       - name: Download Latest Sync Artifact
-        id: download-sync
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
-          run_id=$(gh run list --workflow="${WORKFLOW_FILE}" --branch=main --json databaseId,conclusion -q '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
-          if [ -z "$run_id" ]; then
-            echo "No successful sync workflow run found. No artifact to download."
-          else
-            echo "Found Sync run_id=$run_id"
-            gh run download "$run_id" -n test-db-dump --dir .
-          fi  
+          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
+            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
+        
+          [ -n "$run_id" ] && gh run download "$run_id" -n test-db-dump --dir . || echo "No artifact to download."
+           
 
       - name: Install Dependencies
         run: | 
@@ -106,18 +104,15 @@ jobs:
             echo "No previous database dump found"
           fi
 
-      - name: Download Latest Env Vars Artifact
-        id: download-env-vars
+      - name: Download Env Vars
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
-          run_id=$(gh run list --workflow="${WORKFLOW_FILE}" --branch=main --json databaseId,conclusion -q '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
-          if [ -z "$run_id" ]; then
-            echo "No successful sync workflow run found. No artifact to download."
-          else
-            echo "Found Sync run_id=$run_id"
-            gh run download "$run_id" -n env-vars --dir .
-          fi
+          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
+            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
+      
+          [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
+
 
       - name: Load Environment Variables and Run Tests
         run: |
