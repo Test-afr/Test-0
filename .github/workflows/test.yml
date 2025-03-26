@@ -10,7 +10,6 @@ on:
 env:
   PYTHONWARNDEFAULTENCODING: 'true'
   PY_COLORS: 1
-  TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
 permissions:
   contents: write
@@ -73,8 +72,8 @@ jobs:
           python-version-file: 'pyproject.toml'
           allow-prereleases: true
 
-      - name: Install PostgreSQL client and GitHub CLI
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gh
+      - name: Install GitHub CLI
+        run: sudo apt-get update && sudo apt-get install -y gh
 
       - name: Configure GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
