@@ -43,7 +43,7 @@ jobs:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
           SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }} 
         run: |
           set +x
           variables=$(curl -sS -X POST "https://backboard.railway.app/graphql/v2" \
