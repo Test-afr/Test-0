@@ -68,23 +68,23 @@ jobs:
           # Manually export the test database URL
           export DEVELOPMENT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
           echo "DEVELOPMENT_DATABASE_URL=$DEVELOPMENT_DATABASE_URL" >> $GITHUB_ENV
-      
+
           # Run sync_db.py
           poetry run python .github/scripts/sync_db.py
 
-      # - name: Save DB Dump
-      #   run: |
-      #     echo "Saving current database state"
-      #     docker run --rm --network=host \
-      #       -e PGPASSWORD=postgres \
-      #       postgres:latest pg_dump -h localhost -U postgres -d test_db > dump.sql
+      - name: Save DB Dump
+        run: |
+          echo "Saving current database state"
+          docker run --rm --network=host \
+            -e PGPASSWORD=postgres \
+            postgres:latest pg_dump -h localhost -U postgres -d test_db > dump.sql
 
-      # - name: Upload DB Dump Artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: test-db-dump
-      #     path: dump.sql
-      #     retention-days: 5
+      - name: Upload DB Dump Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-db-dump
+          path: dump.sql
+          retention-days: 5
 
       - name: Upload Environment Variables Artifact
         uses: actions/upload-artifact@v4
