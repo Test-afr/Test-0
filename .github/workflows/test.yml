@@ -106,12 +106,19 @@ jobs:
             echo "No previous database dump found"
           fi
 
-      - name: Download Environment Variables
-        uses: actions/download-artifact@v4
-        with:
-          name: env-vars
-          path: .
-        
+      - name: Download Latest Env Vars Artifact
+        id: download-env-vars
+        env:
+          WORKFLOW_FILE: "Sync Test DB with Prod"
+        run: |
+          run_id=$(gh run list --workflow="${WORKFLOW_FILE}" --branch=main --json databaseId,conclusion -q '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
+          if [ -z "$run_id" ]; then
+            echo "No successful sync workflow run found. No artifact to download."
+          else
+            echo "Found Sync run_id=$run_id"
+            gh run download "$run_id" -n env-vars --dir .
+          fi
+
       - name: Load Environment Variables and Run Tests
         run: |
           set -o allexport
