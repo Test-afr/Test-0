@@ -9,7 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: Workflow
 
-    steps:
+    steps:    
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      
       - name: Check if 10th Commit
         id: check_commit
         run: |
@@ -22,9 +25,6 @@ jobs:
             exit 0
           fi
           echo "This is a 10th commit. Proceeding with sync."
-    
-      - name: Checkout Repo
-        uses: actions/checkout@v4
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
