@@ -1,42 +1,58 @@
 name: Sync Test DB with Prod
 
 on:
-  push: {}       # triggers on every push to any branch
+  issues:
+    types: [closed]
   workflow_dispatch:
 
 jobs:
-  sync:
+  sync-db:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    environment: Workflow
+
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # fetch full history so that commit count is accurate
 
-      - name: Check Commit Count
-        id: check
-        run: |
-          # Count all commits across the repository
-          commit_count=$(git rev-list --count --all)
-          echo "Total commit count: $commit_count"
-          # If the commit count is not a multiple of 10, exit with code 78 to skip the job
-          if (( commit_count % 10 != 0 )); then
-            echo "Not a sync commit. Skipping job."
-            exit 78
-          fi
-          echo "This is a sync commit. Proceeding with job."
-
-      - name: Setup Python
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version-file: 'pyproject.toml'
           allow-prereleases: true
 
-      - name: Install Dependencies
+      - name: Get Full Python Version
+        id: full-python-version
+        run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))") >> $GITHUB_OUTPUT
+
+      - name: Bootstrap Poetry
         run: |
-          pip install poetry
-          poetry install --with dev
+          curl -sSL https://install.python-poetry.org | python - -y
+
+      - name: Update PATH
+        if: ${{ matrix.os != 'Windows' }}
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Configure Poetry
+        run: poetry config virtualenvs.in-project true
+
+      - name: Setup UV Cache
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.full-python-version.outputs.version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Ensure Cache is Healthy
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: |
+          [ "$(command -v timeout)" ] || function timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          timeout 10s poetry run pip --version || rm -rf .venv
+
+      - name: Check lock file
+        run: poetry check --lock
+  
+      - name: Install Dependencies
+        run: poetry install --with dev
 
       - name: Fetch Environment Variables & Sync DB
         env:
@@ -46,6 +62,7 @@ jobs:
           PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
           set +x
+      
           # Fetch Railway environment variables
           variables=$(curl -sS -X POST "https://backboard.railway.app/graphql/v2" \
             -H "Authorization: Bearer ${RAILWAY_API_TOKEN}" \
@@ -61,7 +78,9 @@ jobs:
           }
           EOF
           )
+      
           eval $(echo "$variables" | jq -r '.data.variables | to_entries | .[] | @sh "export \(.key)=\(.value)"') > env_vars.env
+
           # Dump the Railway database with --clean option
           pg_dump --clean "$DATABASE_PUBLIC_URL" > dump.sql
 
