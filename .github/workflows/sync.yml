@@ -52,7 +52,7 @@ jobs:
           eval $(echo "$variables" | jq -r '.data.variables | to_entries | .[] | @sh "export \(.key)=\(.value)"') > env_vars.env
 
           # Dump the Railway database with --clean option
-          pg_dump --clean "$RAILWAY_DATABASE_URL" > dump.sql
+          pg_dump --clean "$DATABASE_PUBLIC_URL" > dump.sql
 
       - name: Upload DB Dump Artifact
         uses: actions/upload-artifact@v4
