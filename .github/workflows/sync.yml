@@ -1,37 +1,31 @@
 name: Sync Test DB with Prod
 
 on:
-  push: {}       # triggers on pushes to all branches
+  push: {}       # triggers on every push to any branch
   workflow_dispatch:
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    outputs:
-      should_sync: ${{ steps.check.outputs.should_sync }}
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Check if 10th Commit
-        id: check
-        run: |
-          commit_count=$(git rev-list --count HEAD)
-          echo "Commit count: $commit_count"
-          if (( commit_count % 10 == 0 )); then
-            echo "should_sync=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_sync=false" >> $GITHUB_OUTPUT
-          fi
-
   sync:
-    needs: check
-    if: ${{ needs.check.outputs.should_sync == 'true' }}
     runs-on: ubuntu-latest
     environment: Workflow
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # fetch full history so that commit count is accurate
+
+      - name: Check Commit Count
+        id: check
+        run: |
+          # Count all commits across the repository
+          commit_count=$(git rev-list --count --all)
+          echo "Total commit count: $commit_count"
+          # If the commit count is not a multiple of 10, exit with code 78 to skip the job
+          if (( commit_count % 10 != 0 )); then
+            echo "Not a sync commit. Skipping job."
+            exit 78
+          fi
+          echo "This is a sync commit. Proceeding with job."
 
       - name: Setup Python
         uses: actions/setup-python@v5
