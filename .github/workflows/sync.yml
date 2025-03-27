@@ -9,20 +9,6 @@ jobs:
   sync-db:
     runs-on: ubuntu-latest
     environment: Workflow
-    services:
-      postgres:
-        image: postgres:latest
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout Repo
@@ -64,20 +50,9 @@ jobs:
           )
       
           eval $(echo "$variables" | jq -r '.data.variables | to_entries | .[] | @sh "export \(.key)=\(.value)"') > env_vars.env
-      
-          # Manually export the test database URL
-          export DEVELOPMENT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
-          echo "DEVELOPMENT_DATABASE_URL=$DEVELOPMENT_DATABASE_URL" >> $GITHUB_ENV
 
-          # Run sync_db.py
-          poetry run python .github/scripts/sync_db.py
-
-      - name: Save DB Dump
-        run: |
-          echo "Saving current database state"
-          docker run --rm --network=host \
-            -e PGPASSWORD=postgres \
-            postgres:latest pg_dump -h localhost -U postgres -d test_db > dump.sql
+          # Dump the Railway database with --clean option
+          pg_dump --clean "$RAILWAY_DATABASE_URL" > dump.sql
 
       - name: Upload DB Dump Artifact
         uses: actions/upload-artifact@v4
