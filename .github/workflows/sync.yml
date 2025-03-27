@@ -10,6 +10,19 @@ jobs:
     environment: Workflow
 
     steps:
+      - name: Check if 10th Commit
+        id: check_commit
+        run: |
+          # Get the total number of commits on the current branch
+          commit_count=$(git rev-list --count HEAD)
+          echo "Commit count: $commit_count"
+          # Check if commit count is a multiple of 10
+          if (( commit_count % 10 != 0 )); then
+            echo "Not the 10th commit. Exiting sync job."
+            exit 0
+          fi
+          echo "This is a 10th commit. Proceeding with sync."
+    
       - name: Checkout Repo
         uses: actions/checkout@v4
 
@@ -22,6 +35,10 @@ jobs:
       - name: Get Full Python Version
         id: full-python-version
         run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))") >> $GITHUB_OUTPUT
+
+      - name: Bootstrap Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python - -y
 
       - name: Update PATH
         if: ${{ matrix.os != 'Windows' }}
