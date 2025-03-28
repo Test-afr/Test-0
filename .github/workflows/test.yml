@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   lint:
-    if: github.event.label.name == 'ci'
+    if: github.event.label.name == 'ci' || github.event_name == 'workflow_dispatch'
     name: Lint and Format
     runs-on: ubuntu-latest
     steps:
