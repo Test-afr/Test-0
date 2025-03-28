@@ -71,6 +71,10 @@ jobs:
     defaults:
       run:
         shell: bash
+    
+    env:
+      WORKFLOW_FILE: "Sync Test DB with Prod"
+      
     steps:
       - name: Display Current Test Matrix
         run: echo '${{ toJSON(matrix) }}'
@@ -139,8 +143,6 @@ jobs:
           echo "Found run_id: $run_id"
       
       - name: Download Latest Sync Artifact
-        env:
-          WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
@@ -157,8 +159,6 @@ jobs:
           fi
 
       - name: Download Env Vars
-        env:
-          WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
