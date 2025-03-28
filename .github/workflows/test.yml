@@ -141,13 +141,36 @@ jobs:
             echo "No previous database dump found"
           fi
 
-      - name: Download Env Vars
+      - name: Download Env Vars Artifact
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Ensure we're authenticated
+          echo "$GH_TOKEN" | gh auth login --with-token
+      
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
-          [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
+          echo "Fetched run_id: $run_id"
+          
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" -n env-vars --dir .
+          else
+            echo "No run with a successful conclusion found, no artifact downloaded."
+            exit 1
+          fi
+          
+          echo "Directory structure after artifact download:"
+          find . -maxdepth 2
+          
+          if [ -f env-vars/env_vars.env ]; then
+            mv env-vars/env_vars.env .
+            echo "Artifact moved to current directory:"
+            ls -lah .
+          else
+            echo "Artifact file 'env-vars/env_vars.env' not found."
+            exit 1
+          fi
 
 
       - name: Load Environment Variables and Run Tests
