@@ -127,7 +127,7 @@ jobs:
       
       - name: Debug GitHub CLI Auth Status
         run: gh auth status
-
+      
       # - name: Debug Workflow Runs
       #   run: |
       #     echo "Looking for workflow: $WORKFLOW_FILE"
@@ -141,7 +141,7 @@ jobs:
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
-          gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
+          gh run list --workflow="$WORKFLOW_FILE" --limit 2 --json databaseId,conclusion,name
           
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
@@ -161,7 +161,7 @@ jobs:
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
-          gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
+          gh run list --workflow="$WORKFLOW_FILE" --limit 2 --json databaseId,conclusion,name
           
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
