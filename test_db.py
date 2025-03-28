@@ -2,20 +2,16 @@ import os
 
 import psycopg2
 import pytest
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Always use the local database for testing
-LOCAL_DB_URL = os.getenv("LOCAL_DB_URL", "postgresql://postgres:postgres@localhost:5432/test_db")
+DEVELOPMENT_DATABASE_URL = os.getenv("DEVELOPMENT_DATABASE_URL")
 
 
 @pytest.fixture
 def db_connection() -> str:
     """Fixture that provides a database connection and handles cleanup."""
     # Set up connection
-    conn = psycopg2.connect(LOCAL_DB_URL)
+    conn = psycopg2.connect(DEVELOPMENT_DATABASE_URL)
     cursor = conn.cursor()
 
     # Provide both connection and cursor to the test
