@@ -128,12 +128,23 @@ jobs:
       - name: Debug GitHub CLI Auth Status
         run: gh auth status
       
+      # - name: Debug Workflow Runs
+      #   run: |
+      #     echo "Looking for workflow: $WORKFLOW_FILE"
+      #     gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
+          
+      #     run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
+      #       -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
+      #     echo "Found run_id: $run_id"
+      
       - name: Download Latest Sync Artifact
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
+          gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
+          
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
-            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
+            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
         
           [ -n "$run_id" ] && gh run download "$run_id" -n test-db-dump --dir . || echo "No artifact to download."
       
@@ -150,8 +161,10 @@ jobs:
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
+          gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
+          
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
-            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
+            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
       
           [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
 
