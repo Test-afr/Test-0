@@ -147,7 +147,7 @@ jobs:
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
         
-          [ -n "$run_id" ] && gh run download "$run_id" -n test-db-dump --dir . || echo "No artifact to download."
+          [ -n "$run_id" ] && gh run download "$run_id" -n test-db-dump --dir .
       
       - name: Load DB Dump If Exists
         run: |
@@ -163,7 +163,7 @@ jobs:
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
       
-          [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
+          [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir .
 
       - name: Load Environment Variables and Run Tests
         run: |
