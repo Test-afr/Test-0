@@ -1,10 +1,7 @@
 name: Python Unit Tests
-
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-  push:
-    branches: [main]
+      types: [labeled]
   workflow_dispatch:
 
 env:
@@ -12,7 +9,7 @@ env:
   PY_COLORS: 1
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   deployments: write
 
@@ -22,6 +19,7 @@ concurrency:
 
 jobs:
   lint:
+    if: github.event.label.name == 'ci'
     name: Lint and Format
     runs-on: ubuntu-latest
     steps:
@@ -41,15 +39,16 @@ jobs:
 
       - name: Run Ruff Linting
         run: poetry run ruff check .
-
+        
   test:
-    name: "Build and Test"
+    if: github.event.label.name == 'ci'
+    name: "Build and Test on ${{ matrix.os }} / ${{ matrix.python-version }}"
     needs: lint
-    runs-on: ubuntu-latest
+    runs-on: "${{ matrix.os }}-latest"
 
     services:
       postgres:
-        image: postgres:latest
+        image: postgres
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -61,23 +60,71 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          
+    strategy:
+      matrix:
+        os:
+          - Ubuntu
+      fail-fast: true
 
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Display Current Test Matrix
+        run: echo '${{ toJSON(matrix) }}'
 
-      - name: Setup Python
+      - name: Checkout PR Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version-file: 'pyproject.toml'
           allow-prereleases: true
 
+      - name: Get Full Python Version
+        id: full-python-version
+        run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))") >> $GITHUB_OUTPUT
+
+      - name: Bootstrap Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python - -y
+
+      - name: Update PATH
+        if: ${{ matrix.os != 'Windows' }}
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Configure Poetry
+        run: poetry config virtualenvs.in-project true
+
+      - name: Setup UV Cache
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.full-python-version.outputs.version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Ensure Cache is Healthy
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: |
+          [ "$(command -v timeout)" ] || function timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          timeout 10s poetry run pip --version || rm -rf .venv
+          
+      - name: Check lock file
+        run: poetry check --lock
+
+      - name: Install Dependencies
+        run: poetry install --with dev
+      
       - name: Install GitHub CLI
         run: sudo apt-get update && sudo apt-get install -y gh
 
       - name: Configure GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-        
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token  
+      
       - name: Download Latest Sync Artifact
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
@@ -86,13 +133,7 @@ jobs:
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
         
           [ -n "$run_id" ] && gh run download "$run_id" -n test-db-dump --dir . || echo "No artifact to download."
-           
-
-      - name: Install Dependencies
-        run: | 
-          pip install poetry
-          poetry install --with dev
-
+      
       - name: Load DB Dump If Exists
         run: |
           if [ -f dump.sql ]; then
@@ -111,11 +152,9 @@ jobs:
       
           [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
 
-
       - name: Load Environment Variables and Run Tests
         run: |
           set -o allexport
           source env_vars.env
           set +o allexport
           poetry run pytest -v
-        
