@@ -32,7 +32,7 @@ jobs:
         run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Configure Poetry
-        run: poetry config virtualenvs.in-project true
+        run: poetry config virtualenvs.in-project true  
 
       - name: Setup UV Cache
         uses: actions/cache@v4
@@ -79,6 +79,7 @@ jobs:
           )
       
           eval $(echo "$variables" | jq -r '.data.variables | to_entries | .[] | @sh "export \(.key)=\(.value)"') > env_vars.env
+          echo 'export DEVELOPMENT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"' >> env_vars.env
 
           # Dump the Railway database with --clean option
           pg_dump --clean "$DATABASE_PUBLIC_URL" > dump.sql
