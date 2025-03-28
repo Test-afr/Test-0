@@ -12,6 +12,7 @@ permissions:
   contents: read
   pull-requests: write
   deployments: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -70,6 +71,10 @@ jobs:
     defaults:
       run:
         shell: bash
+    
+    env:
+      WORKFLOW_FILE: "Sync Test DB with Prod"
+
     steps:
       - name: Display Current Test Matrix
         run: echo '${{ toJSON(matrix) }}'
@@ -128,9 +133,16 @@ jobs:
       - name: Debug GitHub CLI Auth Status
         run: gh auth status
       
+      - name: Debug Workflow Runs
+        run: |
+          echo "Looking for workflow: '$WORKFLOW_FILE'"
+          gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
+          
+          # Use a single command to avoid pipeline failures
+          latest_run=$(gh run list --workflow="$WORKFLOW_FILE" --limit 20 --json databaseId,conclusion --jq '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
+          echo "Found successful run_id: $latest_run"
+      
       - name: Download Latest Sync Artifact
-        env:
-          WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
@@ -147,8 +159,6 @@ jobs:
           fi
 
       - name: Download Env Vars
-        env:
-          WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
