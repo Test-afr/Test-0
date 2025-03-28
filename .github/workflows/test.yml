@@ -12,7 +12,6 @@ permissions:
   contents: read
   pull-requests: write
   deployments: write
-  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -132,9 +131,9 @@ jobs:
       - name: Debug Workflow Runs
         run: |
           echo "Looking for workflow: $WORKFLOW_FILE"
-          gh run list --workflow="$WORKFLOW_FILE" --branch=main --limit 5 --json databaseId,conclusion,name
+          gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
           
-          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
+          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
           echo "Found run_id: $run_id"
       
