@@ -74,7 +74,7 @@ jobs:
     
     env:
       WORKFLOW_FILE: "Sync Test DB with Prod"
-      
+
     steps:
       - name: Display Current Test Matrix
         run: echo '${{ toJSON(matrix) }}'
@@ -135,12 +135,12 @@ jobs:
       
       - name: Debug Workflow Runs
         run: |
-          echo "Looking for workflow: $WORKFLOW_FILE"
+          echo "Looking for workflow: '$WORKFLOW_FILE'"
           gh run list --workflow="$WORKFLOW_FILE" --limit 5 --json databaseId,conclusion,name
           
-          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
-            -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
-          echo "Found run_id: $run_id"
+          # Use a single command to avoid pipeline failures
+          latest_run=$(gh run list --workflow="$WORKFLOW_FILE" --limit 20 --json databaseId,conclusion --jq '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
+          echo "Found successful run_id: $latest_run"
       
       - name: Download Latest Sync Artifact
         run: |
