@@ -119,6 +119,12 @@ jobs:
       - name: Install Dependencies
         run: poetry install --with dev
       
+      - name: Install GitHub CLI
+        run: sudo apt-get update && sudo apt-get install -y gh
+
+      - name: Configure GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token  
+      
       - name: Download Latest Sync Artifact
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
