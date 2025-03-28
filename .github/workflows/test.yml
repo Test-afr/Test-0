@@ -148,8 +148,6 @@ jobs:
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
           [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
-          mv env-vars/env_vars.env .
-          ls -lah
 
 
       - name: Load Environment Variables and Run Tests
