@@ -12,6 +12,7 @@ permissions:
   contents: read
   pull-requests: write
   deployments: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -129,7 +130,7 @@ jobs:
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
-          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
+          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
         
           [ -n "$run_id" ] && gh run download "$run_id" -n test-db-dump --dir . || echo "No artifact to download."
@@ -147,7 +148,7 @@ jobs:
         env:
           WORKFLOW_FILE: "Sync Test DB with Prod"
         run: |
-          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --branch=main --json databaseId,conclusion \
+          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --json databaseId,conclusion \
             -q '.[] | select(.conclusion=="success") | .databaseId' | head -n1) || exit 0
       
           [ -n "$run_id" ] && gh run download "$run_id" -n env-vars --dir . || echo "No artifact to download."
