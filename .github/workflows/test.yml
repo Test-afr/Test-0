@@ -143,7 +143,6 @@ jobs:
             exit 1
           fi
           echo "run_id=$run_id" >> $GITHUB_OUTPUT
-        shell: bash 
       
       - name: Download Latest Sync Artifact
         run: |
