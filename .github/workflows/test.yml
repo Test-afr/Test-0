@@ -136,12 +136,15 @@ jobs:
       - name: Find Latest Successful Run ID
         id: find_run
         run: |
-          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --limit 20 --json databaseId,conclusion --jq '.[] | select(.conclusion=="success") | .databaseId' | head -n1)
-          if [ -z "$run_id" ]; then
+          run_id=$(gh run list --workflow="$WORKFLOW_FILE" --limit 20 --json databaseId,conclusion --jq '[.[] | select(.conclusion=="success") | .databaseId][0]')
+
+          if [ -z "$run_id" ] || [ "$run_id" == "null" ]; then
             echo "::error::No successful run found within the last 20 runs for workflow '$WORKFLOW_FILE'."
             exit 1
           fi
           echo "run_id=$run_id" >> $GITHUB_OUTPUT
+        shell: bash 
+
       
       - name: Download Latest Sync Artifact
         run: |
