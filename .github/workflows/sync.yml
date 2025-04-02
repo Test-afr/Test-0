@@ -41,8 +41,9 @@ jobs:
           eval $(echo "$variables" | jq -r '.data.variables | to_entries | .[] | @sh "export \(.key)=\(.value)"') > env_vars.env
           echo 'export DEVELOPMENT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"' >> env_vars.env
 
-          # Dump the Railway database with --clean option
-          pg_dump --clean "$DATABASE_PUBLIC_URL" > dump.sql
+          # --- Run the dump script ---
+          chmod +x .github/scripts/dump_db.sh
+          .github/scripts/dump_db.sh dump.sql
 
       - name: Upload DB Dump Artifact
         uses: actions/upload-artifact@v4
