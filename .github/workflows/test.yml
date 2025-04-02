@@ -160,5 +160,3 @@ jobs:
           ls -l env_vars.env && source env_vars.env
           poetry run pytest -v
   
-
- 
