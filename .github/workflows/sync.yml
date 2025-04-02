@@ -82,7 +82,7 @@ jobs:
           echo 'export DEVELOPMENT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"' >> env_vars.env
 
           # Dump the Railway database with --clean option
-          pg_dump --clean "$DATABASE_PUBLIC_URL" > dump.sql
+          pg_dumb pgsql --clean "$DATABASE_PUBLIC_URL" > dump.sql
 
       - name: Upload DB Dump Artifact
         uses: actions/upload-artifact@v4
