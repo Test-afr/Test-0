@@ -126,16 +126,12 @@ jobs:
         run: | 
           sudo apt-get update 
           sudo apt-get install -y gh
-
+      
       - name: Configure GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token      
-      
-      - name: Debug GitHub CLI Auth Status
-        run: gh auth status
-      
-      - name: Find Latest Successful Run ID
-        id: find_run
+        id: configure
         run: |
+          gh auth login --with-token
+          
           run_id=$(gh run list --workflow="$WORKFLOW_FILE" --limit 20 --json databaseId,conclusion --jq '[.[] | select(.conclusion=="success") | .databaseId][0]')
 
           if [ -z "$run_id" ] || [ "$run_id" == "null" ]; then
@@ -144,34 +140,24 @@ jobs:
           fi
           echo "run_id=$run_id" >> $GITHUB_OUTPUT
       
-      - name: Download Latest Sync Artifact
+      - name: Download and Load DB Dump
         run: |
-          echo "Attempting to download artifact 'test-db-dump' from run ${{ steps.find_run.outputs.run_id }}"
-          gh run download "${{ steps.find_run.outputs.run_id }}" -n test-db-dump --dir .
-          echo "Listing files after DB dump download attempt:"
-          ls -l dump.sql # Check if dump.sql exists
-      
-      - name: Load DB Dump If Exists
-        run: |
+          gh run download "${{ steps.configure.outputs.run_id }}" -n test-db-dump --dir .  
           if [ -f dump.sql ]; then
-            echo "Restoring database from dump.sql"
+            ls -l dump.sql
             PGPASSWORD=postgres psql -h localhost -U postgres -d test_db < dump.sql
           else
             echo "::error::Database dump file 'dump.sql' not found after download attempt."
             exit 1
           fi
 
-      - name: Download Env Vars Artifact
+      - name: Download and Load Environment Variables and Run Tests
         run: |
-          echo "Attempting to download artifact 'env-vars' from run ${{ steps.find_run.outputs.run_id }}"
-          gh run download "${{ steps.find_run.outputs.run_id }}" -n env-vars --dir .
+          echo "Attempting to download artifact 'env-vars' from run ${{ steps.configure.outputs.run_id }}"
+          gh run download "${{ steps.configure.outputs.run_id }}" -n env-vars --dir .
           echo "Listing files after env-vars download attempt:"
-          ls -l env_vars.env # Check if env_vars.env exists
-  
-      - name: Load Environment Variables and Run Tests
-        run: |
-          set -o allexport
-          source env_vars.env
-          set +o allexport
+          ls -l env_vars.env && source env_vars.env
           poetry run pytest -v
+  
+
  
