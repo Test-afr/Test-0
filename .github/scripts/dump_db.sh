@@ -21,7 +21,7 @@ eval "$TABLE_LIST_CMD" | while IFS= read -r table_name; do
   [ -z "$table_name" ] && continue
 
   # Append \copy output (to STDOUT) directly to the main dump file
-  psql "$DATABASE_PUBLIC_URL" -c "\copy (SELECT * FROM \"$SCHEMA_NAME\".\"$table_name\" TABLESAMPLE SYSTEM($SAMPLE_PERCENTAGE)) TO STDOUT" >> "$DUMP_FILE"
+  psql "$DATABASE_PUBLIC_URL" -c "\copy (SELECT * FROM \"$SCHEMA_NAME\".\"$table_name\" TABLESAMPLE BERNOULLI($SAMPLE_PERCENTAGE)) TO STDOUT" >> "$DUMP_FILE"
 
 done
 
