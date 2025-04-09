@@ -2,7 +2,6 @@ name: Python Unit Tests
 on:
   pull_request:
       types: [labeled]
-  workflow_dispatch:
 
 env:
   PYTHONWARNDEFAULTENCODING: 'true'
@@ -21,7 +20,7 @@ concurrency:
 
 jobs:
   lint:
-    if: github.event.label.name == 'ci' || github.event_name == 'workflow_dispatch'
+    if: github.event.label.name == 'ci'
     name: Lint and Format
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +42,7 @@ jobs:
         run: poetry run ruff check .
         
   test:
-    if: github.event.label.name == 'ci' || github.event_name == 'workflow_dispatch'
+    if: github.event.label.name == 'ci'
     name: "Build and Test on ${{ matrix.os }} / ${{ matrix.python-version }}"
     needs: lint
     runs-on: "${{ matrix.os }}-latest"
@@ -68,7 +67,7 @@ jobs:
         os:
           - Ubuntu
       fail-fast: true
-
+    
     defaults:
       run:
         shell: bash -e -o pipefail {0}
@@ -129,7 +128,7 @@ jobs:
 
       - name: Configure GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-      
+        
       - name: Find Latest Successful Run ID
         id: configure
         run: |
@@ -150,13 +149,13 @@ jobs:
           else
             echo "::error::Database dump file 'dump.sql' not found after download attempt."
             exit 1
-          fi
-
-      - name: Download and Load Environment Variables and Run Tests
+          fi          
+      
+      - name: Fetch and Load Environment Variables and Run Tests
         run: |
           echo "Attempting to download artifact 'env-vars' from run ${{ steps.configure.outputs.run_id }}"
           gh run download "${{ steps.configure.outputs.run_id }}" -n env-vars --dir .
           echo "Listing files after env-vars download attempt:"
           ls -l env_vars.env && source env_vars.env
           poetry run pytest -v
-  
+ 
