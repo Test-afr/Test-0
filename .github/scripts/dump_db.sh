@@ -30,15 +30,11 @@ eval "$TABLE_LIST_CMD" | while IFS= read -r table_name; do
     fi
 
     if [ "$SAMPLE_COUNT" -gt 0 ]; then
-       # Add the COPY command header
-       echo "COPY $full_table_name FROM STDIN;" >> "$DUMP_FILE"
-
-       # Append the data using \copy
-       psql "$DATABASE_PUBLIC_URL" -c "\copy (SELECT * FROM $full_table_name LIMIT $SAMPLE_COUNT) TO STDOUT" >> "$DUMP_FILE"
-
-       # Add the COPY command terminator
-       echo "\." >> "$DUMP_FILE"
-       # Add a blank line for readability between tables in the dump file
+       select_statement="SELECT * FROM $full_table_name AS \"$table_name\" LIMIT $SAMPLE_COUNT"
+       pg_dump --data-only --table="$select_statement" "$DATABASE_PUBLIC_URL" | \
+         grep -v '^--' | \
+         grep -v '^SET ' >> "$DUMP_FILE"
+       # Add a newline for separation between potential COPY blocks
        echo "" >> "$DUMP_FILE"
     fi
   fi
