@@ -7,39 +7,45 @@ set -e
 
 [ -z "$DATABASE_PUBLIC_URL" ] && exit 1
 
-# Dump schema only
+# Dump schema only first
 pg_dump -s --clean --if-exists "$DATABASE_PUBLIC_URL" > "$DUMP_FILE"
 
-# Get all tables
+# Get tables and add data
 psql -tA "$DATABASE_PUBLIC_URL" -c "
-  SELECT table_schema, table_name FROM information_schema.tables
+  SELECT table_name FROM information_schema.tables
   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-" | while IFS='|' read -r schema_name table_name; do
+" | while read -r table_name; do
   [ -z "$table_name" ] && continue
   
-  # Get sample directly using SQL
+  # Create a temp table with deterministic sampling (first 10%, not random)
+  TEMP_TABLE="temp_${RANDOM}"
+  
+  # Find the primary key for ordering
+  pk_column=$(psql -tA "$DATABASE_PUBLIC_URL" -c "
+    SELECT a.attname FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE i.indrelid = '${table_name}'::regclass AND i.indisprimary
+    LIMIT 1
+  ")
+  
+  # Default to 'id' if no PK found
+  [ -z "$pk_column" ] && pk_column="id"
+  
+  # Sample first N% of rows ordered by PK
   psql "$DATABASE_PUBLIC_URL" -c "
-    COPY (
-      SELECT * FROM \"$schema_name\".\"$table_name\" 
-      ORDER BY random() 
-      LIMIT GREATEST(1, (SELECT count(*) * $SAMPLE_PERCENTAGE / 100 FROM \"$schema_name\".\"$table_name\"))
-    ) TO STDOUT WITH CSV HEADER
-  " > temp_data.csv
+    CREATE TEMP TABLE ${TEMP_TABLE} AS
+    SELECT * FROM ${table_name}
+    ORDER BY ${pk_column}
+    LIMIT (SELECT GREATEST(1, count(*) * ${SAMPLE_PERCENTAGE} / 100) FROM ${table_name})
+  "
   
-  # Skip if file is empty (just header)
-  if [ $(wc -l < temp_data.csv) -gt 1 ]; then
-    # Add SQL commands to the dump file
-    echo "" >> "$DUMP_FILE"
-    echo "-- Data for table $schema_name.$table_name" >> "$DUMP_FILE"
-    echo "COPY \"$schema_name\".\"$table_name\" FROM stdin;" >> "$DUMP_FILE"
-    
-    # Skip header and convert to PostgreSQL copy format
-    tail -n +2 temp_data.csv | sed 's/\\/\\\\/g' >> "$DUMP_FILE"
-    
-    # End COPY command
-    echo "\\." >> "$DUMP_FILE"
-    echo "" >> "$DUMP_FILE"
-  fi
+  # Dump the temp table with proper inserts
+  pg_dump --data-only --column-inserts --table=${TEMP_TABLE} "$DATABASE_PUBLIC_URL" |
+    grep -v "^--" |
+    grep -v "^SET" |
+    grep -v "^SELECT" |
+    sed "s/${TEMP_TABLE}/${table_name}/g" >> "$DUMP_FILE"
   
-  rm -f temp_data.csv
+  # Clean up
+  psql "$DATABASE_PUBLIC_URL" -c "DROP TABLE IF EXISTS ${TEMP_TABLE}"
 done
