@@ -145,6 +145,10 @@ jobs:
           gh run download "${{ steps.configure.outputs.run_id }}" -n test-db-dump --dir .  
           if [ -f dump.sql ]; then
             ls -l dump.sql
+            # Add this line to drop/recreate the public schema first
+            PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d test_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+            
+            # Now load the dump, wrapped to handle FKs
             { 
               echo "SET session_replication_role = replica;"; 
               cat dump.sql; 
@@ -154,6 +158,7 @@ jobs:
             echo "::error::Database dump file 'dump.sql' not found after download attempt."
             exit 1
           fi          
+         
        
       
       - name: Fetch and Load Environment Variables and Run Tests
