@@ -9,37 +9,39 @@ if [ -z "$DATABASE_PUBLIC_URL" ]; then
   exit 1
 fi
 
-# Dump schema for all non-system schemas (simpler than specifying one)
 pg_dump -s "$DATABASE_PUBLIC_URL" > "$DUMP_FILE"
 
-# Query for all user tables (schema and name), excluding system schemas
-TABLE_LIST_CMD="psql -tA \"$DATABASE_PUBLIC_URL\" -c \"SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND table_type = 'BASE TABLE';\""
+SCHEMA_LIST_CMD="psql -tA \"$DATABASE_PUBLIC_URL\" -c \"SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND schema_name NOT LIKE 'pg_temp_%' AND schema_name NOT LIKE 'pg_toast_temp_%';\""
 
-# Loop through schema.table pairs read using IFS
-eval "$TABLE_LIST_CMD" | while IFS=$'\t' read -r schema_name table_name; do
-  # Skip empty lines if any occur
-  [ -z "$schema_name" ] || [ -z "$table_name" ] && continue
+while IFS= read -r schema_name; do
+  [ -z "$schema_name" ] && continue
 
-  # Quote names correctly for use in SQL
-  full_table_name="\"$schema_name\".\"$table_name\""
+  TABLE_LIST_CMD="psql -tA \"$DATABASE_PUBLIC_URL\" -c \"SELECT table_name FROM information_schema.tables WHERE table_schema = '$schema_name' AND table_type = 'BASE TABLE';\""
 
-  ROW_COUNT=$(psql -tA "$DATABASE_PUBLIC_URL" -c "SELECT COUNT(*) FROM $full_table_name;")
+  while IFS= read -r table_name; do
+    [ -z "$table_name" ] && continue
 
-  # Check if row count is a positive number
-  if [[ "$ROW_COUNT" =~ ^[1-9][0-9]*$ ]]; then
-    SAMPLE_COUNT=$(( ROW_COUNT * SAMPLE_PERCENTAGE / 100 ))
-    if [ "$SAMPLE_PERCENTAGE" -gt 0 ] && [ "$SAMPLE_COUNT" -eq 0 ]; then
-        SAMPLE_COUNT=1
+    full_table_name="\"$schema_name\".\"$table_name\""
+
+    ROW_COUNT=$(psql -tA "$DATABASE_PUBLIC_URL" -c "SELECT COUNT(*) FROM $full_table_name;")
+
+    if [[ "$ROW_COUNT" =~ ^[0-9]+$ ]]; then
+      if [ "$ROW_COUNT" -gt 0 ]; then
+        SAMPLE_COUNT=$(( ROW_COUNT * SAMPLE_PERCENTAGE / 100 ))
+        if [ "$SAMPLE_PERCENTAGE" -gt 0 ] && [ "$SAMPLE_COUNT" -eq 0 ]; then
+            SAMPLE_COUNT=1
+        fi
+
+        if [ "$SAMPLE_COUNT" -gt 0 ]; then
+           echo "COPY $full_table_name FROM STDIN;" >> "$DUMP_FILE"
+           psql "$DATABASE_PUBLIC_URL" -c "\copy (SELECT * FROM $full_table_name LIMIT $SAMPLE_COUNT) TO STDOUT" >> "$DUMP_FILE"
+           echo "\." >> "$DUMP_FILE"
+           echo "" >> "$DUMP_FILE"
+        fi
+      fi
     fi
+  done < <(eval "$TABLE_LIST_CMD")
 
-    if [ "$SAMPLE_COUNT" -gt 0 ]; then
-       # Use the dynamically read schema_name and table_name
-       echo "COPY $full_table_name FROM STDIN;" >> "$DUMP_FILE"
-       psql "$DATABASE_PUBLIC_URL" -c "\copy (SELECT * FROM $full_table_name LIMIT $SAMPLE_COUNT) TO STDOUT" >> "$DUMP_FILE"
-       echo "\." >> "$DUMP_FILE"
-       echo "" >> "$DUMP_FILE"
-    fi
-  fi
-done
+done < <(eval "$SCHEMA_LIST_CMD")
 
 exit 0
